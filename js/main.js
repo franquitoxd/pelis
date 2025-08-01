@@ -4,11 +4,11 @@ const videoTitle = document.getElementById("videoTitle");
 const controls = document.getElementById("controls");
 const nextBtn = document.getElementById("nextBtn");
 const fullscreenBtn = document.getElementById("fullscreenBtn");
+const pushMessage = document.getElementById("pushMessage");
 
 let pendingIndexes = [];
-let hideControlsTimeout;
-let hideCursorTimeout;
-let hideFullscreenTimeout;
+let currentIndex = -1;
+let hideControlsTimeout, hideCursorTimeout, hideFullscreenTimeout;
 
 function shuffleArray(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -22,11 +22,6 @@ function initializePlaylist() {
   pendingIndexes = shuffleArray([...videos.keys()]);
 }
 
-function getFileNameFromUrl(url) {
-  const parts = url.split("/");
-  return decodeURIComponent(parts[parts.length - 1]);
-}
-
 function showTitle(name) {
   videoTitle.textContent = name;
   videoTitle.style.opacity = "1";
@@ -35,24 +30,66 @@ function showTitle(name) {
   }, 3000);
 }
 
-function playNextVideo() {
-  if (pendingIndexes.length === 0) {
-    console.log("Ya se reprodujeron todos los videos. Fin.");
-    return;
-  }
-  const index = pendingIndexes.shift();
-  const url = videos[index];
-  const name = getFileNameFromUrl(url);
+function mostrarMensajesSecuenciales(actual, siguiente) {
+  if (!actual) return;
 
-  video.src = url;
-  video.load();
-  video.play().catch(err => {
-    console.log("Autoplay bloqueado:", err);
-  });
-  showTitle(name);
+  pushMessage.innerHTML = `<i class="fa-solid fa-film"></i> <strong>Estás viendo:</strong><br>${actual.nombre}`;
+  pushMessage.className = "show";
+
+  setTimeout(() => {
+    pushMessage.className = "hide";
+    setTimeout(() => {
+      if (siguiente) {
+        pushMessage.innerHTML = `<i class="fa-solid fa-hourglass-start"></i> <strong>Ya comienza:</strong><br>${siguiente.nombre}`;
+        pushMessage.className = "show";
+        setTimeout(() => {
+          pushMessage.className = "hide";
+          setTimeout(() => {
+            pushMessage.style.display = "none";
+          }, 600);
+        }, 3000);
+      } else {
+        pushMessage.style.display = "none";
+      }
+    }, 600);
+  }, 3000);
 }
 
-video.addEventListener("ended", playNextVideo);
+function iniciarMensajesTemporizados() {
+  const actual = currentIndex >= 0 ? videos[currentIndex] : null;
+  const siguiente =
+    pendingIndexes.length > 0 ? videos[pendingIndexes[0]] : null;
+
+  setTimeout(() => {
+    mostrarMensajesSecuenciales(actual, siguiente);
+  }, 30 * 60 * 1000); // después de 30 minutos
+
+  video.onloadedmetadata = () => {
+    const duracion = video.duration;
+    if (duracion > 30 * 60) {
+      const tiempoAntesDeFinal = (duracion - 25 * 60) * 1000;
+      if (tiempoAntesDeFinal > 0) {
+        setTimeout(() => {
+          mostrarMensajesSecuenciales(actual, siguiente);
+        }, tiempoAntesDeFinal);
+      }
+    }
+  };
+}
+
+function playNextVideo() {
+  if (pendingIndexes.length === 0) {
+    console.log("Fin de la lista de reproducción.");
+    return;
+  }
+  currentIndex = pendingIndexes.shift();
+  const { url, nombre } = videos[currentIndex];
+  video.src = url;
+  video.load();
+  video.play().catch((err) => console.log("Error:", err));
+  showTitle(nombre);
+  iniciarMensajesTemporizados();
+}
 
 overlay.addEventListener("click", () => {
   overlay.style.display = "none";
@@ -62,27 +99,12 @@ overlay.addEventListener("click", () => {
   playNextVideo();
 });
 
-document.addEventListener("keydown", (e) => {
-  if (e.keyCode === 32 || e.keyCode === 13) {
-    if (video.paused) {
-      video.play().catch(err => {
-        console.log("Error al reproducir:", err);
-      });
-    } else {
-      video.pause();
-    }
-  }
-
-  if (e.key.toLowerCase() === "f") {
-    toggleFullscreen();
-  }
+nextBtn.addEventListener("click", () => {
+  playNextVideo();
+  resetControlsTimeout();
 });
 
-video.addEventListener("dblclick", () => {
-  toggleFullscreen();
-});
-
-fullscreenBtn.addEventListener("click", toggleFullscreen);
+video.addEventListener("ended", playNextVideo);
 
 function toggleFullscreen() {
   if (!document.fullscreenElement) {
@@ -92,9 +114,20 @@ function toggleFullscreen() {
   }
 }
 
-nextBtn.addEventListener("click", () => {
-  playNextVideo();
-  resetControlsTimeout();
+fullscreenBtn.addEventListener("click", toggleFullscreen);
+video.addEventListener("dblclick", toggleFullscreen);
+
+document.addEventListener("keydown", (e) => {
+  if (e.keyCode === 32 || e.keyCode === 13) {
+    if (video.paused) {
+      video.play().catch((err) => console.log("Error:", err));
+    } else {
+      video.pause();
+    }
+  }
+  if (e.key.toLowerCase() === "f") {
+    toggleFullscreen();
+  }
 });
 
 function showControls() {
