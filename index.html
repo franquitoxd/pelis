@@ -3,31 +3,781 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="css/styles.css">
-  <title>PELIS ALEATORIAS</title>
+  <title>PELIS PRO - TV EDITION</title>
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* --- CORE STYLES --- */
+    html, body {
+      margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden;
+      font-family: 'Montserrat', sans-serif; user-select: none;
+    }
+    body.cursor-hidden { cursor: none; }
+    
+    video {
+      position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+      object-fit: cover; background: #000; z-index: 1;
+    }
+
+    /* DEGRADADOS Y UI GENERAL */
+    .controls-gradient {
+      position: absolute; bottom: 0; left: 0; width: 100%; height: 250px;
+      background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, transparent 100%);
+      z-index: 10; opacity: 0; transition: opacity 0.5s ease; pointer-events: none;
+    }
+    .top-gradient {
+      position: absolute; top: 0; left: 0; width: 100%; height: 150px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%);
+      z-index: 10; opacity: 0; transition: opacity 0.5s ease; pointer-events: none;
+    }
+    body.show-ui .controls-gradient, body.show-ui .top-gradient { opacity: 1; }
+
+    /* TITULO */
+    .video-title {
+      position: absolute; bottom: 100px; left: 60px; z-index: 20;
+      font-family: 'Bebas Neue', cursive; font-size: 80px; color: #fff;
+      text-transform: uppercase; letter-spacing: 2px;
+      text-shadow: 2px 2px 20px rgba(0, 0, 0, 0.8);
+      opacity: 0; transform: translateY(30px); transition: opacity 1s, transform 1s; pointer-events: none;
+    }
+    .video-title.visible { opacity: 1; transform: translateY(0); }
+
+    /* CONTROLES FLOTANTES */
+    .controls {
+      position: absolute; bottom: 50px; right: 60px; z-index: 30; display: flex; gap: 15px;
+      opacity: 0; transition: opacity 0.3s;
+    }
+    body.show-ui .controls { opacity: 1; }
+    
+    .btn-glass {
+      padding: 15px 20px; font-size: 20px; background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(5px); border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff; cursor: pointer; border-radius: 8px; transition: all 0.2s;
+    }
+    .btn-glass:hover { background: white; color: black; transform: scale(1.1); }
+
+    /* NOTIFICACION LATERAL */
+    .next-notify {
+      position: absolute; top: 30px; right: -400px; z-index: 40;
+      background: rgba(20,20,20,0.9); backdrop-filter: blur(10px);
+      border-left: 4px solid #e50914; padding: 10px; border-radius: 8px 0 0 8px;
+      display: flex; gap: 15px; align-items: center; width: 320px;
+      transition: right 0.5s ease-out; box-shadow: -5px 5px 20px rgba(0,0,0,0.5);
+    }
+    .next-notify.show { right: 0; }
+    .next-notify img { width: 120px; height: 68px; object-fit: cover; border-radius: 4px; background: #333; }
+    .notify-text h4 { margin: 5px 0 0 0; color: white; font-size: 16px; font-family: 'Bebas Neue'; letter-spacing: 1px; }
+
+    /* TOAST NOTIFICATIONS */
+    .toast-container {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      z-index: 3000; display: flex; flex-direction: column; gap: 10px;
+      pointer-events: none;
+    }
+    .toast {
+      background: rgba(30, 30, 30, 0.95); backdrop-filter: blur(10px);
+      color: white; padding: 15px 30px; border-radius: 50px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5); font-family: 'Montserrat'; font-weight: 600;
+      display: flex; align-items: center; gap: 10px;
+      opacity: 0; transform: translateY(-20px); transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.success { border-bottom: 3px solid #28a745; }
+    .toast.error { border-bottom: 3px solid #dc3545; }
+    .toast.info { border-bottom: 3px solid #007bff; }
+
+    /* PAUSA UI */
+    .pause-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 15; display: none; background: black;
+    }
+    .pause-bg {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      object-fit: cover; opacity: 0.4; filter: blur(15px); z-index: 1;
+    }
+    .pause-content {
+      position: relative; z-index: 2; width: 100%; height: 100%;
+      display: flex; justify-content: center; align-items: center;
+    }
+    .pause-text {
+      font-family: 'Bebas Neue'; font-size: 120px; color: white; letter-spacing: 15px;
+      text-shadow: 0 0 30px rgba(0,0,0,0.8);
+    }
+    .time-display {
+      position: absolute; bottom: 40px; left: 60px; z-index: 3;
+      font-family: 'Bebas Neue'; font-size: 60px; color: rgba(255,255,255,0.8);
+      text-shadow: 2px 2px 10px black;
+    }
+    .time-display span { font-size: 30px; color: rgba(255,255,255,0.5); }
+
+    /* INDICADOR DE VOLUMEN (Lado Derecho) */
+    .volume-display {
+      position: absolute; top: 50%; right: 40px; transform: translateY(-50%);
+      font-family: 'Bebas Neue'; font-size: 60px; color: white;
+      text-shadow: 2px 2px 10px black; opacity: 0; transition: opacity 0.3s;
+      background: rgba(0,0,0,0.6); padding: 20px 30px; border-radius: 15px;
+      backdrop-filter: blur(5px); z-index: 200; pointer-events: none;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+    }
+    .volume-bar-container {
+      width: 10px; height: 150px; background: rgba(255,255,255,0.2);
+      border-radius: 5px; position: relative; overflow: hidden;
+    }
+    .volume-bar-fill {
+      position: absolute; bottom: 0; left: 0; width: 100%; background: #e50914;
+      transition: height 0.1s;
+    }
+
+    /* STATUS MESSAGE (Seek) */
+    #statusMessage {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      font-size: 50px; color: white; background: rgba(0,0,0,0.6); padding: 30px 50px;
+      border-radius: 15px; z-index: 100; font-family: 'Bebas Neue'; display: none;
+      backdrop-filter: blur(5px); box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    }
+
+    /* LOADER */
+    .loader {
+      border: 5px solid rgba(255, 255, 255, 0.1); width: 60px; height: 60px;
+      border-radius: 50%; border-left-color: #e50914; position: absolute;
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+      animation: spin 1s linear infinite; z-index: 5; display: none;
+    }
+    @keyframes spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+
+    /* START OVERLAY */
+    .start-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: black; z-index: 60; display: none; justify-content: center; align-items: center; cursor: pointer;
+    }
+    .start-overlay i { font-size: 80px; color: white; opacity: 0.8; transition: transform 0.2s; }
+    .start-overlay:hover i { transform: scale(1.2); }
+
+    /* --- ADMIN MODAL --- */
+    .modal {
+      display: none; position: fixed; z-index: 2000; left: 0; top: 0;
+      width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); backdrop-filter: blur(10px);
+      overflow-y: auto; 
+    }
+    .modal-content {
+      background: #1a1a1a; margin: 3% auto; padding: 0; border: 1px solid #333;
+      width: 90%; max-width: 500px; color: white; border-radius: 15px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8); display: flex; flex-direction: column; height: 85vh;
+      transition: max-width 0.3s ease;
+    }
+    .modal-content.wide-mode { max-width: 900px; }
+
+    .admin-tabs { display: flex; border-bottom: 1px solid #333; }
+    .tab-btn {
+      flex: 1; padding: 20px; background: transparent; color: #888; border: none;
+      cursor: pointer; font-family: 'Bebas Neue'; font-size: 24px; letter-spacing: 1px;
+    }
+    .tab-btn.active { color: #e50914; border-bottom: 2px solid #e50914; background: rgba(229, 9, 20, 0.05); }
+
+    .tab-content { padding: 30px; overflow-y: auto; flex: 1; display: none; }
+    .tab-content.active { display: block; }
+
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; color: #aaa; font-size: 14px; }
+    input {
+      width: 100%; padding: 12px; background: #111; border: 1px solid #333;
+      color: white; border-radius: 5px; box-sizing: border-box; font-family: 'Montserrat';
+    }
+    input:focus { border-color: #e50914; outline: none; }
+    
+    .btn-primary {
+      width: 100%; padding: 15px; background: #e50914; color: white; border: none;
+      border-radius: 5px; font-weight: bold; cursor: pointer; margin-top: 10px;
+    }
+    .btn-primary:hover { background: #f40612; }
+
+    /* GRID GESTION */
+    .admin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; }
+    .admin-card { background: #252525; border-radius: 8px; overflow: hidden; border: 1px solid #333; transition: transform 0.2s; }
+    .admin-card:hover { transform: translateY(-3px); border-color: #555; }
+    .card-thumb { width: 100%; height: 100px; object-fit: cover; background: #000; border-bottom: 1px solid #333; }
+    .card-body { padding: 10px; }
+    .card-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #ddd; }
+    .card-actions { display: flex; gap: 5px; justify-content: space-between; }
+    .card-btn { flex: 1; padding: 6px; font-size: 12px; border-radius: 4px; border: none; cursor: pointer; color: white; transition: background 0.2s; }
+    .btn-edit { background: #333; border: 1px solid #555; }
+    .btn-edit:hover { background: #007bff; border-color: #007bff; }
+    .btn-delete { background: #333; border: 1px solid #555; }
+    .btn-delete:hover { background: #dc3545; border-color: #dc3545; }
+    .btn-delete.confirm-state { background: #ff9800; color: black; font-weight: bold; }
+
+    .close-modal { position: absolute; top: 10px; right: 20px; font-size: 30px; cursor: pointer; color: #aaa; }
+    .close-modal:hover { color: white; }
+
+  </style>
 </head>
 <body>
 
   <video id="videoPlayer" autoplay muted playsinline></video>
+  
+  <div id="loader" class="loader"></div>
+  <div id="statusMessage"></div> 
 
-  <div class="overlay" id="overlay">
+  <div class="toast-container" id="toastContainer"></div>
+
+  <div class="volume-display" id="volumeDisplay">
+    <div class="volume-bar-container">
+      <div class="volume-bar-fill" id="volumeFill" style="height: 50%;"></div>
+    </div>
+    <div id="volumeText">50</div>
+  </div>
+
+  <div class="pause-overlay" id="pauseOverlay">
+    <img src="" class="pause-bg" id="pauseBg">
+    <div class="pause-content">
+      <div class="pause-text">PAUSA</div>
+    </div>
+    <div class="time-display" id="timeDisplay">00:00 <span>/ 00:00</span></div>
+  </div>
+
+  <div class="start-overlay" id="startOverlay">
     <i class="fa-solid fa-play"></i>
   </div>
 
+  <div class="controls-gradient"></div>
+  <div class="top-gradient"></div>
+
   <div class="video-title" id="videoTitle"></div>
 
-  <div class="controls" id="controls">
-    <button id="nextBtn"><i class="fa-solid fa-right-long"></i></button>
+  <div id="nextNotify" class="next-notify">
+    <img id="nextThumb" src="" alt="">
+    <div class="notify-text">
+      <small>A continuación</small>
+      <h4 id="nextTitleNotify">Titulo Pelicula</h4>
+    </div>
   </div>
 
-  <button id="fullscreenBtn" class="fullscreen-btn">
-    <i class="fa-solid fa-expand"></i>
-  </button>
+  <div class="controls" id="controls">
+    <button class="btn-glass" id="prevBtn" title="Anterior"><i class="fa-solid fa-backward"></i></button>
+    <button class="btn-glass" id="nextBtn" title="Siguiente"><i class="fa-solid fa-forward"></i></button>
+    <button class="btn-glass" id="fullscreenBtn" title="Pantalla Completa"><i class="fa-solid fa-expand"></i></button>
+  </div>
 
-  <div id="pushMessage"></div>
+  <div id="adminModal" class="modal">
+    <div class="modal-content" id="modalContent">
+      <span class="close-modal" id="closeModalBtn">&times;</span>
+      
+      <div class="admin-tabs">
+        <button class="tab-btn active" data-tab="add" id="tabAddBtn">Agregar</button>
+        <button class="tab-btn" data-tab="manage">Gestionar</button>
+      </div>
 
-  <script src="js/main.js"></script>
-  <script src="js/videos.js"></script>
-  <script src="https://kit.fontawesome.com/3846a067f2.js" crossorigin="anonymous"></script>
+      <div id="tab-add" class="tab-content active">
+        <h2 id="formTitle">Nueva Película</h2>
+        <input type="hidden" id="editVideoId">
+        
+        <div class="form-group">
+          <label>Título</label>
+          <input type="text" id="newVideoName" placeholder="Ej: Matrix">
+        </div>
+        <div class="form-group">
+          <label>URL del Video (.mp4)</label>
+          <input type="text" id="newVideoUrl" placeholder="https://...">
+        </div>
+        <div class="form-group">
+          <label>URL del Póster (Horizontal 16:9)</label>
+          <input type="text" id="newVideoPoster" placeholder="https://...">
+        </div>
+        <button class="btn-primary" id="saveVideoBtn">Publicar</button>
+        <button class="btn-primary" id="cancelEditBtn" style="background:#555; display:none;">Cancelar Edición</button>
+      </div>
+
+      <div id="tab-manage" class="tab-content">
+        <h2>Catálogo</h2>
+        <div id="videoListContainer" class="admin-grid"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyACQlSm0VIdAIkqAVxm6Xnq94JWlpOguco",
+      authDomain: "peliculas-bf49f.firebaseapp.com",
+      projectId: "peliculas-bf49f",
+      storageBucket: "peliculas-bf49f.firebasestorage.app",
+      messagingSenderId: "223484639412",
+      appId: "1:223484639412:web:1a495c57224d04e692ffe1"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+
+    // --- VARIABLES ---
+    let videos = [];
+    let pendingIndexes = [];
+    let historyStack = [];
+    let currentIndex = -1;
+    let currentUser = null;
+    let isAdmin = false;
+    let fadeInterval;
+    let uiTimeout;
+    let volumeTimeout;
+    
+    // Variables Control & Seek
+    let pressTimer;
+    let isLongPress = false;
+    let seekInterval;
+    let isSeeking = false;
+    
+    // DOM Elements
+    const video = document.getElementById("videoPlayer");
+    const loader = document.getElementById("loader");
+    const videoTitle = document.getElementById("videoTitle");
+    const pauseOverlay = document.getElementById("pauseOverlay");
+    const pauseBg = document.getElementById("pauseBg");
+    const timeDisplay = document.getElementById("timeDisplay");
+    const startOverlay = document.getElementById("startOverlay");
+    const nextNotify = document.getElementById("nextNotify");
+    const statusMessage = document.getElementById("statusMessage");
+    const toastContainer = document.getElementById("toastContainer");
+    
+    // Volumen
+    const volumeDisplay = document.getElementById("volumeDisplay");
+    const volumeFill = document.getElementById("volumeFill");
+    const volumeText = document.getElementById("volumeText");
+    
+    // Admin DOM
+    const adminModal = document.getElementById("adminModal");
+    const modalContent = document.getElementById("modalContent");
+    const tabBtns = document.querySelectorAll(".tab-btn");
+    const tabContents = document.querySelectorAll(".tab-content");
+    const videoListContainer = document.getElementById("videoListContainer");
+    
+    // Formulario
+    const editVideoIdInput = document.getElementById("editVideoId");
+    const formTitle = document.getElementById("formTitle");
+    const saveVideoBtn = document.getElementById("saveVideoBtn");
+    const cancelEditBtn = document.getElementById("cancelEditBtn");
+    const tabAddBtn = document.getElementById("tabAddBtn");
+
+    // --- HELPER: FORMAT TIME ---
+    function formatTime(seconds) {
+      if(isNaN(seconds)) return "00:00";
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      return `${m < 10 ? '0'+m : m}:${s < 10 ? '0'+s : s}`;
+    }
+
+    // --- HELPER: TOAST NOTIFICATIONS ---
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      let icon = 'info-circle';
+      if(type === 'success') icon = 'check-circle';
+      if(type === 'error') icon = 'exclamation-circle';
+      toast.innerHTML = `<i class="fa-solid fa-${icon}"></i> ${message}`;
+      toastContainer.appendChild(toast);
+      setTimeout(() => toast.classList.add('show'), 100);
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 400);
+      }, 3000);
+    }
+
+    // --- HELPER: VOLUME UI ---
+    function updateVolumeUI(vol) {
+      const val = Math.round(vol * 100);
+      volumeFill.style.height = `${val}%`;
+      volumeText.textContent = val;
+      
+      volumeDisplay.style.opacity = '1';
+      clearTimeout(volumeTimeout);
+      volumeTimeout = setTimeout(() => {
+        volumeDisplay.style.opacity = '0';
+      }, 1500);
+    }
+
+    // --- AUDIO FADE ---
+    function fadeAudio(targetVolume, duration = 1000) {
+      clearInterval(fadeInterval);
+      const step = 0.05;
+      const intervalTime = duration * step;
+      fadeInterval = setInterval(() => {
+        let current = video.volume;
+        if (Math.abs(current - targetVolume) < step) {
+          video.volume = targetVolume;
+          clearInterval(fadeInterval);
+        } else if (current < targetVolume) {
+          video.volume = Math.min(1, current + step);
+        } else {
+          video.volume = Math.max(0, current - step);
+        }
+      }, intervalTime);
+    }
+
+    // --- DB OPERATIONS ---
+    async function loadVideos() {
+      try {
+        const snap = await getDocs(collection(db, "videos"));
+        videos = [];
+        snap.forEach(d => videos.push({ id: d.id, ...d.data() }));
+        
+        if (videos.length === 0) {
+          showToast("No hay videos", "error");
+          return;
+        }
+
+        initializePlaylist();
+        
+        if(video.paused && currentIndex === -1) {
+          playNextVideo();
+        }
+      } catch(e) { 
+        console.error(e);
+        showToast("Error de conexión", "error");
+      }
+    }
+
+    function shuffleArray(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function initializePlaylist() {
+      pendingIndexes = shuffleArray([...Array(videos.length).keys()]);
+      historyStack = [];
+    }
+
+    function playNextVideo() {
+      if (videos.length === 0) return;
+      if (currentIndex !== -1) historyStack.push(currentIndex);
+      if (pendingIndexes.length === 0) initializePlaylist();
+      currentIndex = pendingIndexes.shift();
+      loadAndPlay(videos[currentIndex]);
+    }
+
+    function playPrevVideo() {
+      if (historyStack.length === 0) {
+        showToast("Inicio de lista", "info");
+        return;
+      }
+      if (currentIndex !== -1) pendingIndexes.unshift(currentIndex);
+      currentIndex = historyStack.pop();
+      loadAndPlay(videos[currentIndex]);
+    }
+
+    function loadAndPlay(item) {
+      fadeAudio(0, 500); 
+      setTimeout(() => {
+        video.src = item.url;
+        video.poster = item.poster || "";
+        pauseBg.src = item.poster || "";
+        video.load();
+        
+        const p = video.play();
+        if(p !== undefined) {
+          p.then(() => {
+            video.muted = false;
+            video.volume = 0;
+            fadeAudio(1, 1000);
+            showTitle(item.nombre);
+          }).catch(() => {
+            startOverlay.style.display = 'flex';
+          });
+        }
+      }, 500);
+    }
+
+    function showTitle(name) {
+      videoTitle.textContent = name;
+      videoTitle.classList.add('visible');
+      setTimeout(() => videoTitle.classList.remove('visible'), 6000);
+    }
+
+    // --- NOTIFICACION AUTOMATICA (CAMBIAR TIEMPO AQUI) ---
+    setInterval(() => {
+      const nextIdx = pendingIndexes.length > 0 ? pendingIndexes[0] : 0;
+      const nextVid = videos[nextIdx];
+      if(nextVid) {
+        document.getElementById("nextTitleNotify").textContent = nextVid.nombre;
+        document.getElementById("nextThumb").src = nextVid.poster || "";
+        nextNotify.classList.add("show");
+        setTimeout(() => nextNotify.classList.remove("show"), 8000);
+      }
+    }, 35 * 60 * 1000); // 35 MINUTOS
+
+    // --- EVENTOS VIDEO ---
+    video.addEventListener('waiting', () => loader.style.display = 'block');
+    video.addEventListener('playing', () => {
+      loader.style.display = 'none';
+      pauseOverlay.style.display = 'none';
+      startOverlay.style.display = 'none';
+    });
+    video.addEventListener('pause', () => {
+      if(!video.seeking && video.currentTime > 0 && !video.ended) {
+        updateTimeDisplay();
+        pauseOverlay.style.display = 'flex';
+      }
+    });
+    video.addEventListener('timeupdate', updateTimeDisplay);
+    video.addEventListener('ended', playNextVideo);
+
+    function updateTimeDisplay() {
+      const cur = formatTime(video.currentTime);
+      const tot = formatTime(video.duration);
+      timeDisplay.innerHTML = `${cur} <span>/ ${tot}</span>`;
+    }
+
+    function togglePlay() {
+      if(video.paused) {
+        fadeAudio(1, 500);
+        video.play();
+      } else {
+        fadeAudio(0, 300);
+        setTimeout(() => video.pause(), 300);
+      }
+    }
+
+    // --- LOGICA TECLAS (SEEK, VOLUME, FULLSCREEN) ---
+    function startSeek(direction) { 
+      isSeeking = true;
+      pauseOverlay.style.display = 'flex'; 
+      document.querySelector('.pause-text').style.display = 'none'; 
+      seekInterval = setInterval(() => {
+        video.currentTime += (direction * 5); 
+        const icon = direction > 0 ? 'forward' : 'backward';
+        statusMessage.innerHTML = `<i class="fa-solid fa-${icon}"></i> ${formatTime(video.currentTime)}`;
+        statusMessage.style.display = 'block';
+      }, 100);
+    }
+
+    function stopSeek() {
+      isSeeking = false;
+      clearInterval(seekInterval);
+      statusMessage.style.display = 'none';
+      document.querySelector('.pause-text').style.display = 'block';
+      pauseOverlay.style.display = 'none';
+      video.play();
+    }
+
+    function changeVolume(delta) {
+      let v = video.volume + delta;
+      if (v > 1) v = 1;
+      if (v < 0) v = 0;
+      video.volume = v;
+      updateVolumeUI(v);
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if(adminModal.style.display === 'block') return;
+      if(e.repeat && !isLongPress) return;
+
+      const k = e.key.toLowerCase();
+
+      // VOLUMEN (Arriba/Abajo - Funciona con Control TV)
+      if(k === 'arrowup') { changeVolume(0.1); return; }
+      if(k === 'arrowdown') { changeVolume(-0.1); return; }
+
+      // FULLSCREEN (Enter presionado)
+      if((k === 'enter' || k === ' ') && !isLongPress) {
+        pressTimer = setTimeout(() => {
+          isLongPress = true;
+          (!document.fullscreenElement) ? document.documentElement.requestFullscreen() : document.exitFullscreen();
+        }, 800);
+      }
+
+      // SEEK (Flechas Lado Presionadas)
+      if((k === 'arrowright' || k === 'arrowleft') && !isLongPress && !isSeeking) {
+         pressTimer = setTimeout(() => {
+            isLongPress = true;
+            startSeek(k === 'arrowright' ? 1 : -1);
+         }, 200); 
+      }
+
+      // ATAJOS
+      if(e.altKey && k === 'l') (!currentUser) ? loginWithGoogle() : showToast("Conectado: " + currentUser.email, "info");
+      if(e.altKey && k === 'n') (isAdmin) ? openAdmin() : showToast("Solo Admin", "error");
+      
+      showUI();
+    });
+
+    document.addEventListener("keyup", (e) => {
+      if(adminModal.style.display === 'block') return;
+      const k = e.key.toLowerCase();
+      clearTimeout(pressTimer);
+
+      if(isLongPress) {
+        if(isSeeking && (k === 'arrowright' || k === 'arrowleft')) stopSeek();
+        isLongPress = false;
+        return; 
+      }
+
+      if(k === 'enter' || k === ' ') togglePlay();
+      if(k === 'arrowright') playNextVideo();
+      if(k === 'arrowleft') playPrevVideo();
+      if(k === 'f') (!document.fullscreenElement) ? document.documentElement.requestFullscreen() : document.exitFullscreen();
+    });
+
+    document.getElementById("prevBtn").onclick = playPrevVideo;
+    document.getElementById("nextBtn").onclick = playNextVideo;
+    document.getElementById("fullscreenBtn").onclick = () => {
+      (!document.fullscreenElement) ? document.documentElement.requestFullscreen() : document.exitFullscreen();
+    };
+    
+    startOverlay.onclick = () => {
+      startOverlay.style.display = 'none';
+      togglePlay();
+    };
+
+    function showUI() {
+      document.body.classList.add("show-ui");
+      document.body.classList.remove("cursor-hidden");
+      clearTimeout(uiTimeout);
+      uiTimeout = setTimeout(() => {
+        if(adminModal.style.display !== 'block' && !video.paused) {
+          document.body.classList.remove("show-ui");
+          document.body.classList.add("cursor-hidden");
+        }
+      }, 3000);
+    }
+    document.addEventListener("mousemove", showUI);
+
+    // --- AUTH ---
+    function loginWithGoogle() { signInWithPopup(auth, provider); }
+    onAuthStateChanged(auth, async (user) => {
+      if(user) {
+        currentUser = user;
+        const s = await getDoc(doc(db, "users", user.uid));
+        if(s.exists()) isAdmin = s.data().rol === "admin";
+        else await setDoc(doc(db, "users", user.uid), { email: user.email, rol: "usuario" });
+      } else { currentUser = null; isAdmin = false; }
+    });
+
+    // --- ADMIN PANEL ---
+    function openAdmin() {
+      adminModal.style.display = 'block';
+      resetForm();
+      loadAdminList();
+    }
+
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        tabBtns.forEach(b => b.classList.remove('active'));
+        tabContents.forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+        if(btn.dataset.tab === 'manage') modalContent.classList.add('wide-mode');
+        else modalContent.classList.remove('wide-mode');
+      });
+    });
+
+    document.getElementById("closeModalBtn").onclick = () => {
+      adminModal.style.display = 'none';
+      resetForm();
+    };
+
+    saveVideoBtn.onclick = async () => {
+      const id = editVideoIdInput.value;
+      const data = {
+        nombre: document.getElementById("newVideoName").value,
+        url: document.getElementById("newVideoUrl").value,
+        poster: document.getElementById("newVideoPoster").value
+      };
+
+      if(data.nombre && data.url) {
+        try {
+          if(id) {
+            showToast("Actualizando...", "info");
+            await updateDoc(doc(db, "videos", id), data);
+            showToast("Película editada", "success");
+          } else {
+            showToast("Publicando...", "info");
+            await addDoc(collection(db, "videos"), data);
+            showToast("Película agregada", "success");
+          }
+          resetForm();
+          loadVideos();
+          loadAdminList();
+        } catch (e) { showToast("Error al guardar", "error"); }
+      } else { showToast("Faltan campos", "error"); }
+    };
+
+    cancelEditBtn.onclick = () => {
+      resetForm();
+      showToast("Edición cancelada", "info");
+    };
+
+    function resetForm() {
+      editVideoIdInput.value = "";
+      document.getElementById("newVideoName").value = "";
+      document.getElementById("newVideoUrl").value = "";
+      document.getElementById("newVideoPoster").value = "";
+      formTitle.textContent = "Nueva Película";
+      saveVideoBtn.textContent = "Publicar";
+      cancelEditBtn.style.display = "none";
+      tabAddBtn.textContent = "Agregar";
+    }
+
+    function loadAdminList() {
+      videoListContainer.innerHTML = '';
+      videos.forEach(v => {
+        const item = document.createElement('div');
+        item.className = 'admin-card';
+        item.innerHTML = `
+          <img src="${v.poster || ''}" class="card-thumb" onerror="this.style.background='#333'">
+          <div class="card-body">
+            <div class="card-title">${v.nombre}</div>
+            <div class="card-actions">
+              <button onclick="window.editVideo('${v.id}')" class="card-btn btn-edit">EDITAR</button>
+              <button onclick="window.deleteVideo(this, '${v.id}')" class="card-btn btn-delete">BORRAR</button>
+            </div>
+          </div>
+        `;
+        videoListContainer.appendChild(item);
+      });
+    }
+
+    window.editVideo = (id) => {
+      const vid = videos.find(v => v.id === id);
+      if(vid) {
+        editVideoIdInput.value = id;
+        document.getElementById("newVideoName").value = vid.nombre;
+        document.getElementById("newVideoUrl").value = vid.url;
+        document.getElementById("newVideoPoster").value = vid.poster || "";
+        formTitle.textContent = "Editando: " + vid.nombre;
+        saveVideoBtn.textContent = "Actualizar";
+        cancelEditBtn.style.display = "inline-block";
+        tabAddBtn.textContent = "Editando...";
+        tabBtns[0].click();
+      }
+    };
+
+    window.deleteVideo = async (btn, id) => {
+      if(!btn.classList.contains('confirm-state')) {
+        btn.classList.add('confirm-state');
+        btn.textContent = "¿CONFIRMAR?";
+        setTimeout(() => { if(btn) { btn.classList.remove('confirm-state'); btn.textContent = "BORRAR"; } }, 3000);
+        return;
+      }
+      try {
+        showToast("Borrando película...", "info");
+        await deleteDoc(doc(db, "videos", id));
+        showToast("Película eliminada", "success");
+        loadVideos();
+        loadAdminList();
+      } catch(e) { showToast("Error al borrar", "error"); }
+    };
+
+    loadVideos();
+  </script>
 </body>
 </html>
